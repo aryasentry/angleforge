@@ -67,6 +67,23 @@ def test_zen_muse_responses_payload(monkeypatch):
     assert not result['structured_output_enforced']
 
 
+@pytest.mark.parametrize('model,path',[
+    ('muse-spark-1.3-contributor-free','responses'),
+    ('space-bunny-free','chat/completions'),
+])
+def test_zen_console_key_uses_current_inference_endpoint(monkeypatch,model,path):
+    monkeypatch.setenv('OPENCODE_API_KEY','oc_sk_example_test_credential')
+    catalog(monkeypatch,'zen',model)
+    def handler(request):
+        assert str(request.url)==f'https://opencode.ai/inference/openai/v1/{path}'
+        assert request.headers['authorization']=='Bearer oc_sk_example_test_credential'
+        if path=='responses':
+            return httpx.Response(200,json={'status':'completed','output_text':'{"operations":[]}'})
+        return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{"operations":[]}'}}]})
+    transport(monkeypatch,handler)
+    assert run(providers.generate_plan('zen',model,[{'role':'user','content':'synthetic test'}],{}))['proposal']=={'operations':[]}
+
+
 def test_openrouter_strict_payload(monkeypatch):
     monkeypatch.setenv('OPENROUTER_API_KEY','secret')
     catalog(monkeypatch)
@@ -100,6 +117,20 @@ def test_error_body_never_echoes_secret(monkeypatch):
     with pytest.raises(providers.ProviderError) as error:
         run(providers.generate_plan('openrouter','test/model',[],{}))
     assert 'private-key-DO-NOT-ECHO-927' not in str(error.value)
+
+
+def test_zen_free_tier_restriction_is_actionable_without_echoing_body(monkeypatch):
+    monkeypatch.setenv('OPENCODE_API_KEY','oc_sk_private_DO_NOT_ECHO')
+    catalog(monkeypatch,'zen','muse-spark-1.3-contributor-free')
+    requests=[]
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(403,json={'type':'error','error':{'type':'FreeTierError','message':'oc_sk_private_DO_NOT_ECHO'}})
+    transport(monkeypatch,handler)
+    with pytest.raises(providers.ProviderError,match='free tier is restricted to the OpenCode app') as error:
+        run(providers.generate_plan('zen','muse-spark-1.3-contributor-free',[],{}))
+    assert 'oc_sk_private_DO_NOT_ECHO' not in str(error.value)
+    assert len(requests)==1
 
 
 def test_retry_and_token_budget(monkeypatch):

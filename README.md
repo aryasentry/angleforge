@@ -63,6 +63,8 @@ The Director shows the provider/model and selected data before a request. Metada
 
 The external director returns untrusted structured proposals; it cannot run a shell, write files, export, upload originals or delete sources. Applying an AI proposal checks its project, exact operations, source ranges and original revision, and records provider/model/usage provenance. A newer manual edit makes a pending proposal stale.
 
+Zen Console service-account keys are supported through its current inference gateway. A live setup check on 2026-10-11 authenticated the key, but Muse Spark Contributor Free returned `FreeTierError`: Zen limits that free tier to the OpenCode app. It did not produce an AngleForge edit. A paid Zen model with available credits or another provider is required for this setup.
+
 ## Reproducible synthetic demo
 
 The empty state offers **Load synthetic demo**: three visibly labeled local clips with a 12-second event and offsets 0, 2 and 4 seconds. Their audio is deterministic nonperiodic chirps/noise (seed 74291); camera C is portrait. The demo measures alignment from the resulting audio before constructing a cut.
@@ -100,4 +102,4 @@ For frontend development, run the Python backend and `npm run dev` inside `front
 - Two background workers; five uploads per request; 2 GB per file; 50 assets per project. Automatic sync supports up to eight clips and twenty minutes of audio each. Local luma analysis samples at 1 fps for the first ten minutes; contact frames span the clip.
 - Proxies use a maximum 960-pixel edge and 30 fps. Output uses declared rational fps; decode tests tolerate at most one output-frame source mapping error. Browser playback is suitable for inspection and can briefly buffer when switching decoders; export is compiled independently from the same document.
 - Jobs update through one-second polling. SSE/WebSockets and desktop packaging are deferred.
-- No live provider/account-billing test and no Windows runtime test were performed. External AI analysis results are not guaranteed correct; source-bound validation still applies.
+- No successful live model completion, account-billing test or Windows runtime test was performed. The live Zen setup check was blocked by its free-tier restriction. External AI analysis results are not guaranteed correct; source-bound validation still applies.

@@ -143,6 +143,9 @@ async def generate_plan(provider, model_id, messages, schema, max_tokens=1200, c
     if provider == "openrouter" and model["structured_outputs"]:
         payload["response_format"] = {"type": "json_schema", "json_schema": {"name": "angleforge_edit", "strict": True, "schema": schema}}
         payload["provider"] = {"require_parameters": True}
+    # Console service-account keys use the current documented inference gateway.
+    # Both endpoints are fixed official hosts; never accept a caller-supplied URL.
+    inference_base = "https://opencode.ai/inference/openai/v1" if provider == "zen" and key.startswith("oc_sk_") else BASES[provider]
     attempts = min(budget.retries + 1, budget.total_tokens // max_tokens)
     if attempts < 1:
         raise ProviderError("The output token budget is below this request's limit.")
@@ -152,7 +155,7 @@ async def generate_plan(provider, model_id, messages, schema, max_tokens=1200, c
             ctx.progress(None, "Requesting an external edit proposal")
         try:
             async with httpx.AsyncClient(timeout=budget.timeout_seconds, follow_redirects=False) as client:
-                response = await _cancelable(client.post(BASES[provider] + "/" + model["endpoint"], json=payload, headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}), ctx)
+                response = await _cancelable(client.post(inference_base + "/" + model["endpoint"], json=payload, headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}), ctx)
         except httpx.HTTPError:
             # A timeout can already have been billed: do not retry an uncertain submission.
             raise ProviderError("Provider connection failed or timed out. The request was not automatically resubmitted; check provider usage before retrying.") from None
@@ -160,6 +163,14 @@ async def generate_plan(provider, model_id, messages, schema, max_tokens=1200, c
             await _cancelable(asyncio.sleep(min(2 ** attempt, 4)), ctx)
             continue
         if response.status_code != 200:
+            if provider == "zen" and response.status_code == 403 and len(response.content) <= 16_384:
+                try:
+                    error_type = response.json().get("error", {}).get("type")
+                except (ValueError, AttributeError):
+                    error_type = None
+                if error_type == "FreeTierError":
+                    # Map a known error code to local copy; never echo provider text.
+                    raise ProviderError("Zen's free tier is restricted to the OpenCode app and cannot be used by AngleForge. Select a paid Zen model with available credits or another provider; no edits were applied.")
             raise ProviderError(f"Provider rejected the request (HTTP {response.status_code}); check the model, credentials and provider account. Response bodies are withheld to protect secrets.")
         if key.encode() in response.content:
             raise ProviderError("Provider response contained credential material; no edits were applied.")

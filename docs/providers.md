@@ -28,11 +28,16 @@ OpenRouter is the default provider and uses `https://openrouter.ai/api/v1/chat/c
 
 Zen supports documented `responses` and `chat/completions` protocols. The official endpoint table inspected on **2026-10-11** lists `muse-spark-1.3`, `muse-spark-1.2`, `muse-spark-1.3-contributor-free` and the documented GPT/Grok IDs at `https://opencode.ai/zen/v1/responses`; documented compatible models such as `big-pickle`, GLM and Kimi use `https://opencode.ai/zen/v1/chat/completions`. Responses requests use `input`, `max_output_tokens`, and `store:false`; returned output text is parsed as JSON. Zen models requiring Anthropic Messages, Google or System One protocols are displayed but unavailable for this adapter.
 
+Current Console service-account keys (`oc_sk_…`) use `https://opencode.ai/inference/openai/v1/responses` or `/chat/completions`, following the [Console inference API](https://opencode.ai/v2/docs/console/api/inference/). Legacy keys retain the `/zen/v1` routes. Only these fixed official endpoints are used.
+
+**Live access check, 2026-10-11:** a restricted service-account key authenticated successfully against the Console configuration endpoint. The approved synthetic, text-only request to `muse-spark-1.3-contributor-free` was rejected with HTTP 403 `FreeTierError`: “OpenCode's free tier can only be used from within OpenCode.” This free model therefore did not work from AngleForge. The adapter reports this known error using local, actionable text without exposing the response body or automatically retrying. Use a paid Zen model with available credits or another provider. No completed external edit or paid-model billing was verified. Model catalog presence alone does not establish permission to use it from an external app.
+
 The live Zen catalog returned IDs but **no modality, tool-call or strict-schema metadata**. Accordingly, those capabilities are shown as unverified; the director uses text-only JSON proposals without claiming strict provider enforcement. Unknown future IDs have no inferred route and fail explicitly. Alpha or preview models are usable only when their actual catalog ID and supported protocol are verified; no fictional alpha ID is supplied. No alpha-named ID appeared in the catalog inspected on 2026-10-11. Availability and prices may change; refresh the catalog. Contributor/free naming is not a promise about billing or privacy.
 
 The capability and protocol rules come from these official sources:
 
 - [Zen endpoint table and public catalog documentation](https://opencode.ai/docs/zen/)
+- [Console inference endpoints and authentication](https://opencode.ai/v2/docs/console/api/inference/)
 - [OpenRouter model properties](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties)
 - [OpenRouter structured output support and routing](https://openrouter.ai/docs/guides/features/structured-outputs)
 - [OpenRouter tool calling](https://openrouter.ai/docs/guides/features/tool-calling)
@@ -48,7 +53,7 @@ The director is instructed to tie sparse visual observations to source timestamp
 
 The selected model must exist in the current catalog and support the adapter's text protocol. Requests cap instruction length at 6,000 characters, serialized project metadata at 48,000 characters, metadata asset selection at 20 IDs (three for frame planning) and editing proposals at 100 operations. Output tokens default to 1,200 per request with a configurable 1,600 ceiling (hard maximum 4,096). The maximum number of attempts is the smaller of configured retries plus one (hard maximum three attempts) and total output token budget divided by per-attempt token limit. This budget bounds requested output tokens; input/reasoning accounting depends on the provider and is not a guaranteed dollar spending cap.
 
-Only HTTP 429/503 responses can trigger bounded retry. Connection errors and timeouts are not resubmitted automatically because a submission may already be billed. Each attempt has a configurable 45-second default timeout (hard maximum 90 seconds). Cooperative cancellation checks run while awaiting the HTTP call and cancel the local request; remote billing or inference may already have started. Returned numeric token usage and cost, when present, are shown as provider data. No cost estimate is fabricated and no live inference was made during implementation or tests. Runtime inference has billing independent of the coding tools.
+Only HTTP 429/503 responses can trigger bounded retry. Connection errors and timeouts are not resubmitted automatically because a submission may already be billed. Each attempt has a configurable 45-second default timeout (hard maximum 90 seconds). Cooperative cancellation checks run while awaiting the HTTP call and cancel the local request; remote billing or inference may already have started. Returned numeric token usage and cost, when present, are shown as provider data. No cost estimate is fabricated. Automated tests use mock transports; the separately approved live setup check was rejected as described above. Runtime inference has billing independent of the coding tools.
 
 ## Offline grammar
 
