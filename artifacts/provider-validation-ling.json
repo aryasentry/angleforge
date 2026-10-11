@@ -1,0 +1,12 @@
+{
+  "provider": "openrouter",
+  "model": "inclusionai/ling-3.1-flash",
+  "test": "synthetic portrait settings proposal",
+  "footage_sent": false,
+  "free_only": true,
+  "key_spending_cap": 0,
+  "retries": 0,
+  "status": "blocked",
+  "error": "The $0 total key spending cap blocks this zero-priced model. Positive cap awaits user approval.",
+  "error_type": "openrouter_key_limit"
+}

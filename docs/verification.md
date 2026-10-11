@@ -3,7 +3,7 @@
 ## Executed
 
 - macOS Apple Silicon; Python 3.13.13; Node 24.19.0. Native FFmpeg 6.0 / ffprobe 4.4-tessus were available privately and are excluded from source distribution.
-- Full Python suite after Zen setup fixes: **96 passed in 33.35 seconds**. One Starlette test-client deprecation warning about httpx; no failed tests. Provider network tests use mock transports, never live paid inference.
+- Full Python suite after free-only configuration: **104 passed in 34.23 seconds**. One Starlette test-client deprecation warning about httpx; no failed tests. Provider network tests use mock transports, never live paid inference.
 - Frontend: **5 tests passed**; TypeScript check and Vite production build passed. Production JS was about 274 kB / 85 kB gzip.
 - Real FFmpeg tests include VFR/rotation, delayed audio origin, 48 kHz stereo monitoring, known-offset/ambiguous/disconnected synchronization, subframe cut/source mapping, original-media portrait/landscape export, audio cuts/gain/fades, cancellation/process cleanup, publication rollback and concurrent analysis.
 - Synthetic audio alignment: A=0 s, B=2 s, C=4 s; measured maximum error 0 ms on a 0.5 ms correlation grid. Declared acceptance tolerance 50 ms. This is not evidence for all real-world recordings.
@@ -31,6 +31,16 @@ On 2026-10-11, created the user-approved restricted, 30-day Zen key, stored it o
 
 The adapter now uses the documented current inference routes for Console service-account keys, retains legacy-key routes, and translates the known free-tier error into an actionable message without echoing provider response text. Regression tests cover both protocols and secret-safe error reporting.
 
+## Approved OpenRouter free-model setup
+
+On 2026-10-11, created the user-approved `AngleForge Free` key with a $0 total spending cap and 30-day expiry. Saved it only in ignored `.env` with mode `0600`. Configured `dots-studio/dots-3-note-preview:free` and enabled `ANGLEFORGE_AI_FREE_ONLY=1`. Public catalog pricing was zero for input and output; the authenticated key endpoint confirmed the $0 cap and 50 daily free requests before the test.
+
+The real director requested a synthetic portrait edit with no footage. OpenRouter returned a valid `set_settings` operation for 1080×1920 at 30 fps. Applying that proposal through the normal timeline validator passed, and video/audio segments remained unchanged. Returned usage: 1,663 prompt tokens, 502 completion tokens, 2,165 total tokens, **cost: 0**. This was one completed live text request without retries. No paid model or plugin was used. The safe result is saved in `artifacts/provider-validation.json`.
+
+The backend rejects paid, missing or malformed pricing in free-only mode and attaches zero `max_price` values for prompt, completion, request and image charges. Its tests cover refusal before inference and preservation of strict-schema routing. The Director exposes free-only mode and limits model suggestions accordingly.
+
+The final requested model is `inclusionai/ling-3.1-flash`. Its public catalog reports $0 prompt/completion pricing and text-only input. The real request was rejected with HTTP 403 `openrouter_key_limit`: the key's $0 total cap blocked access. The app is configured for Ling with free-only protection, but a live Ling edit is not yet verified. A proposed $0.01 key cap awaits user approval; no spending cap was raised. The prior dedicated key was disabled and replaced with the same $0 cap and 30-day duration after the saved local credential became unavailable. Other account keys were untouched.
+
 ## Remaining limits
 
-Windows setup/process paths are implemented and documented but were not executed. No live external model response, provider billing or semantic editing quality was validated. No consented real event clips were provided; media acceptance uses labeled synthetic fixtures. Captions/transcription, automatic person tracking, drift correction, transitions, collaborative/cloud workflows, desktop packaging and SSE are deferred. Model capability discovery and HTTP adapter tests do not establish live account access. See README and provider/media docs for exact supported operations and resource limits.
+Windows setup/process paths are implemented and documented but were not executed. One live OpenRouter text operation was validated; live image planning, paid billing, other models and broader semantic editing quality remain unverified. No consented real event clips were provided; media acceptance uses labeled synthetic fixtures. Captions/transcription, automatic person tracking, drift correction, transitions, collaborative/cloud workflows, desktop packaging and SSE are deferred. Model capability discovery alone does not establish live account access. See README and provider/media docs for exact supported operations and resource limits.

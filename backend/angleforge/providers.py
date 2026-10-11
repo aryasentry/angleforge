@@ -5,6 +5,7 @@ import json
 import os
 import time
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 import httpx
 
 
@@ -18,6 +19,19 @@ KEYS = {"openrouter": "OPENROUTER_API_KEY", "zen": "OPENCODE_API_KEY"}
 ZEN_RESPONSES = {"gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.3-codex", "gpt-5.3-codex-spark", "gpt-5.2", "gpt-5.2-codex", "gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-max", "gpt-5.1-codex-mini", "gpt-5", "gpt-5-codex", "gpt-5-nano", "grok-4.7", "grok-4.6", "grok-4.5", "grok-build-0.1", "muse-spark-1.3", "muse-spark-1.2", "muse-spark-1.3-contributor-free"}
 ZEN_CHAT = {"qwen3.8-max", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "minimax-m3", "minimax-m2.7", "minimax-m2.5", "glm-5.3-flash", "glm-5.3", "glm-5.2", "glm-5.1", "glm-5", "kimi-k2.5", "kimi-k2.6", "kimi-k2.7-code", "kimi-k3", "mistral-large-4", "big-pickle", "space-bunny-free", "longcat-2.5-preview-free", "step-5-preview-free", "exo-free", "mimo-v2.6-flash-free", "mimo-v2.5-free", "ling-3.1-flash-free", "ling-3.0-flash-fin-free", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free"}
 _CACHE = {}
+
+
+def _free_only():
+    return os.getenv("ANGLEFORGE_AI_FREE_ONLY", "0").lower() in {"1", "true", "yes"}
+
+
+def _zero_pricing(pricing):
+    if not isinstance(pricing, dict) or not {"prompt", "completion"} <= pricing.keys():
+        return False
+    try:
+        return all(Decimal(str(value)) == 0 for value in pricing.values())
+    except (InvalidOperation, ValueError, TypeError):
+        return False
 
 
 def _bounded_env(name, default, low, high):
@@ -48,6 +62,7 @@ def provider_status():
         provider = "openrouter"
     budget = Budget.configured()
     return {"default_provider": provider, "default_model": os.getenv("ANGLEFORGE_AI_MODEL", ""),
+            "free_only": _free_only(),
             "providers": [{"id": name, "configured": bool(os.getenv(key)), "key_env": key} for name, key in KEYS.items()],
             "configured": bool(os.getenv(KEYS[provider])), "local_commands_available": True,
             "max_tokens": budget.max_output_tokens, "retries": budget.retries,
@@ -66,12 +81,13 @@ def _normalize(provider, model):
         return {"id": identifier, "name": model.get("name", identifier), "endpoint": "chat/completions",
                 "input_modalities": inputs, "structured_outputs": "structured_outputs" in parameters,
                 "tool_calling": "tools" in parameters, "capability_evidence": "provider public catalog",
-                "planning_supported": "text" in inputs, "pricing": model.get("pricing") or {}}
+                "planning_supported": "text" in inputs, "pricing": model.get("pricing") or {},
+                "free_only_eligible": _zero_pricing(model.get("pricing"))}
     endpoint = "responses" if identifier in ZEN_RESPONSES else "chat/completions" if identifier in ZEN_CHAT else None
     return {"id": identifier, "name": identifier, "endpoint": endpoint, "input_modalities": ["text"],
             "structured_outputs": None, "tool_calling": None,
             "capability_evidence": "Zen catalog confirms availability only; protocol from official endpoint table; other capabilities unverified",
-            "planning_supported": endpoint is not None, "pricing": {}}
+            "planning_supported": endpoint is not None, "pricing": {}, "free_only_eligible": False}
 
 
 async def list_models(provider):
@@ -120,6 +136,9 @@ async def generate_plan(provider, model_id, messages, schema, max_tokens=1200, c
     key = os.getenv(KEYS[provider])
     if not key:
         raise ProviderError(f"{provider} is not configured. Set {KEYS[provider]} in the backend environment; manual editing and offline commands remain available.")
+    free_only = _free_only()
+    if free_only and provider != "openrouter":
+        raise ProviderError("Free-only mode requires an OpenRouter model with verified zero pricing.")
     budget = Budget.configured()
     if type(max_tokens) is not int or not 128 <= max_tokens <= budget.max_output_tokens:
         raise ProviderError(f"max_tokens must be an integer from 128 to {budget.max_output_tokens}.")
@@ -128,6 +147,8 @@ async def generate_plan(provider, model_id, messages, schema, max_tokens=1200, c
     model = next((item for item in catalog["models"] if item["id"] == model_id), None)
     if model is None:
         raise ProviderError("Model ID is absent from the current public catalog. Refresh and choose an available model.")
+    if free_only and not _zero_pricing(model.get("pricing")):
+        raise ProviderError("Free-only mode blocks paid or unverified model pricing. Select a model with $0 input and output pricing and no additional charges.")
     image_inputs = [part for message in messages if isinstance(message.get("content"), list) for part in message["content"] if isinstance(part, dict) and part.get("type") == "image_url"]
     if image_inputs and (provider != "openrouter" or "image" not in model["input_modalities"]):
         raise ProviderError("Selected model has no verified image-input capability. Use an OpenRouter image-capable model or turn off sampled frames.")
@@ -143,6 +164,8 @@ async def generate_plan(provider, model_id, messages, schema, max_tokens=1200, c
     if provider == "openrouter" and model["structured_outputs"]:
         payload["response_format"] = {"type": "json_schema", "json_schema": {"name": "angleforge_edit", "strict": True, "schema": schema}}
         payload["provider"] = {"require_parameters": True}
+    if free_only:
+        payload.setdefault("provider", {})["max_price"] = {"prompt": 0, "completion": 0, "request": 0, "image": 0}
     # Console service-account keys use the current documented inference gateway.
     # Both endpoints are fixed official hosts; never accept a caller-supplied URL.
     inference_base = "https://opencode.ai/inference/openai/v1" if provider == "zen" and key.startswith("oc_sk_") else BASES[provider]
@@ -163,14 +186,18 @@ async def generate_plan(provider, model_id, messages, schema, max_tokens=1200, c
             await _cancelable(asyncio.sleep(min(2 ** attempt, 4)), ctx)
             continue
         if response.status_code != 200:
-            if provider == "zen" and response.status_code == 403 and len(response.content) <= 16_384:
+            if response.status_code == 403 and len(response.content) <= 16_384:
                 try:
-                    error_type = response.json().get("error", {}).get("type")
+                    error_data = response.json().get("error", {})
+                    error_type = error_data.get("type")
+                    limit_source = error_data.get("metadata", {}).get("limit_source")
                 except (ValueError, AttributeError):
-                    error_type = None
-                if error_type == "FreeTierError":
+                    error_type = limit_source = None
+                if provider == "zen" and error_type == "FreeTierError":
                     # Map a known error code to local copy; never echo provider text.
                     raise ProviderError("Zen's free tier is restricted to the OpenCode app and cannot be used by AngleForge. Select a paid Zen model with available credits or another provider; no edits were applied.")
+                if provider == "openrouter" and limit_source == "openrouter_key_limit":
+                    raise ProviderError("OpenRouter's key spending cap blocked this request. A $0 key cap can also block models with zero token prices. Review the key limit in OpenRouter; no edits were applied.")
             raise ProviderError(f"Provider rejected the request (HTTP {response.status_code}); check the model, credentials and provider account. Response bodies are withheld to protect secrets.")
         if key.encode() in response.content:
             raise ProviderError("Provider response contained credential material; no edits were applied.")

@@ -9,6 +9,7 @@ type ProviderStatus = {
   default_provider: string;
   default_model: string;
   configured: boolean;
+  free_only: boolean;
   providers: { id: string; configured: boolean; key_env: string }[];
   max_tokens: number;
   disclosure: string;
@@ -17,6 +18,7 @@ type Model = {
   id: string;
   name: string;
   planning_supported: boolean;
+  free_only_eligible: boolean;
   input_modalities: string[];
 };
 export function Director({
@@ -202,7 +204,7 @@ export function Director({
               />
               <datalist id="models">
                 {models
-                  .filter((m) => m.planning_supported)
+                  .filter((m) => m.planning_supported && (!status?.free_only || m.free_only_eligible))
                   .map((m) => (
                     <option value={m.id} key={m.id}>
                       {m.name}
@@ -222,6 +224,7 @@ export function Director({
               <strong>
                 {mode} · {model || "model required"}
               </strong>
+              {status?.free_only && <p>Free-only mode · $0 input / $0 output. Paid models are blocked.</p>}
               <p>
                 {status?.disclosure ??
                   "Selected asset names, timings, local analysis metadata and your instruction leave this machine. No frames, audio or video are sent."}

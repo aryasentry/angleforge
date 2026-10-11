@@ -12,7 +12,7 @@ def run(coro):return asyncio.run(coro)
 @pytest.fixture(autouse=True)
 def clean(monkeypatch):
     providers._CACHE.clear()
-    for name in ('OPENROUTER_API_KEY','OPENCODE_API_KEY','ANGLEFORGE_AI_PROVIDER','ANGLEFORGE_AI_MODEL','ANGLEFORGE_AI_MAX_TOKENS','ANGLEFORGE_AI_RETRIES','ANGLEFORGE_AI_TOTAL_OUTPUT_TOKENS'):
+    for name in ('OPENROUTER_API_KEY','OPENCODE_API_KEY','ANGLEFORGE_AI_PROVIDER','ANGLEFORGE_AI_MODEL','ANGLEFORGE_AI_MAX_TOKENS','ANGLEFORGE_AI_RETRIES','ANGLEFORGE_AI_TOTAL_OUTPUT_TOKENS','ANGLEFORGE_AI_FREE_ONLY'):
         monkeypatch.delenv(name,raising=False)
 
 
@@ -97,6 +97,53 @@ def test_openrouter_strict_payload(monkeypatch):
     assert run(providers.generate_plan('openrouter','test/model',[],{}))['structured_output_enforced']
 
 
+@pytest.mark.parametrize('pricing',[
+    {}, {'prompt':'0','completion':'0.001'},
+    {'prompt':'unknown','completion':'0'},
+    {'prompt':'0','completion':'0','image':'0.01'},
+])
+def test_free_only_rejects_paid_or_unverified_pricing_before_inference(monkeypatch,pricing):
+    monkeypatch.setenv('OPENROUTER_API_KEY','test-credential')
+    monkeypatch.setenv('ANGLEFORGE_AI_FREE_ONLY','1')
+    catalog(monkeypatch)
+    providers.list_models.return_value['models'][0]['pricing']=pricing
+    requests=[]
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200,json={'choices':[{'message':{'content':'{}'},'finish_reason':'stop'}]})
+    transport(monkeypatch,handler)
+    with pytest.raises(providers.ProviderError,match='Free-only mode'):
+        run(providers.generate_plan('openrouter','test/model',[],{}))
+    assert not requests
+
+
+@pytest.mark.parametrize('strict',[True,False])
+def test_free_only_caps_all_request_prices_without_losing_strict_routing(monkeypatch,strict):
+    monkeypatch.setenv('OPENROUTER_API_KEY','test-credential')
+    monkeypatch.setenv('ANGLEFORGE_AI_FREE_ONLY','1')
+    catalog(monkeypatch,strict=strict)
+    providers.list_models.return_value['models'][0]['pricing']={'prompt':'0','completion':'0'}
+    def handler(request):
+        payload=json.loads(request.content)
+        assert payload['provider']['max_price']=={'prompt':0,'completion':0,'request':0,'image':0}
+        assert bool(payload['provider'].get('require_parameters'))==strict
+        assert 'models' not in payload and 'plugins' not in payload
+        return httpx.Response(200,json={'choices':[{'message':{'content':'{}'},'finish_reason':'stop'}]})
+    transport(monkeypatch,handler)
+    assert run(providers.generate_plan('openrouter','test/model',[],{}))['proposal']=={}
+    assert providers.provider_status()['free_only']
+
+
+def test_free_only_refuses_other_providers(monkeypatch):
+    monkeypatch.setenv('OPENCODE_API_KEY','test-credential')
+    monkeypatch.setenv('ANGLEFORGE_AI_FREE_ONLY','1')
+    catalog(monkeypatch,'zen','muse-spark-1.3')
+    transport(monkeypatch,lambda request:httpx.Response(200,json={'output_text':'{}'}))
+    with pytest.raises(providers.ProviderError,match='Free-only mode'):
+        run(providers.generate_plan('zen','muse-spark-1.3',[],{}))
+    providers.list_models.assert_not_called()
+
+
 def test_zen_chat_and_unknown_route(monkeypatch):
     monkeypatch.setenv('OPENCODE_API_KEY','secret')
     catalog(monkeypatch,'zen','big-pickle')
@@ -131,6 +178,15 @@ def test_zen_free_tier_restriction_is_actionable_without_echoing_body(monkeypatc
         run(providers.generate_plan('zen','muse-spark-1.3-contributor-free',[],{}))
     assert 'oc_sk_private_DO_NOT_ECHO' not in str(error.value)
     assert len(requests)==1
+
+
+def test_openrouter_key_limit_explains_free_model_block_without_echoing_body(monkeypatch):
+    monkeypatch.setenv('OPENROUTER_API_KEY','private-credential')
+    catalog(monkeypatch)
+    transport(monkeypatch,lambda req:httpx.Response(403,json={'error':{'message':'private-credential','metadata':{'limit_source':'openrouter_key_limit'}}}))
+    with pytest.raises(providers.ProviderError,match='key spending cap') as error:
+        run(providers.generate_plan('openrouter','test/model',[],{}))
+    assert 'private-credential' not in str(error.value)
 
 
 def test_retry_and_token_budget(monkeypatch):
