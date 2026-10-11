@@ -1,0 +1,71 @@
+{
+  "project_revision": 14,
+  "job_status": "succeeded",
+  "duration": "12.000000",
+  "bytes": 374894,
+  "streams": [
+    {
+      "codec_type": "video",
+      "codec_name": "h264",
+      "width": 1920,
+      "height": 1080,
+      "sample_rate": null,
+      "channels": null,
+      "avg_frame_rate": "30/1",
+      "duration": "12.000000"
+    },
+    {
+      "codec_type": "audio",
+      "codec_name": "aac",
+      "width": null,
+      "height": null,
+      "sample_rate": "48000",
+      "channels": 2,
+      "avg_frame_rate": "0/0",
+      "duration": "12.000000"
+    }
+  ],
+  "timeline": [
+    {
+      "id": "8025ee64-6638-4557-b6f8-8dd3739ae06f",
+      "asset_id": "76bddf27-dc5d-4552-8d1a-e56beb4f2b0c",
+      "source_in_us": 0,
+      "source_out_us": 4000000,
+      "output_in_us": 0,
+      "event_in_us": -2000000,
+      "crop": {
+        "mode": "fit",
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    {
+      "id": "9efd72fe-d4c4-4ee9-a059-2c55d2c9da48",
+      "asset_id": "7e437f00-e1c2-4095-a280-d8abbbab4837",
+      "source_in_us": 2000000,
+      "source_out_us": 6000000,
+      "output_in_us": 4000000,
+      "event_in_us": 2000000,
+      "crop": {
+        "mode": "fit",
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    {
+      "id": "4a3f6221-ab85-4c0a-92a6-78067cb93a57",
+      "asset_id": "548aa415-cba0-4bc4-9e17-4ac6f988fe44",
+      "source_in_us": 4000000,
+      "source_out_us": 8000000,
+      "output_in_us": 8000000,
+      "event_in_us": 6000000,
+      "crop": {
+        "mode": "fit",
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  ],
+  "path": "artifacts/angleforge-verified-multicam.mp4",
+  "validation": "ffprobe stream/duration checks and complete audio/video decode"
+}

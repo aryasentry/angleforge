@@ -1,0 +1,212 @@
+Build the following project. Treat this as the product and engineering brief. Make reasonable decisions within it, document assumptions, and ask only about genuinely blocking choices. Use parallel coding agents where they help, with one integration owner. Prioritize a working end-to-end product over a large collection of unfinished features.
+PROJECT: AngleForge
+Working title for a local-first, AI-directed video editor focused on turning independently recorded clips into a coherent multicamera edit.
+1. PRODUCT VISION
+People record the same event from different phones and angles. Their footage ends up scattered, unsynchronized and difficult to edit together.
+AngleForge lets a user import those recordings, align overlapping moments, inspect them visually, and create an edit by combining direct timeline manipulation with natural-language instructions.
+The user should be able to say:
+- “Make a 40-second highlight from these clips.”
+- “Use camera two between 12 and 18 seconds.”
+- “Keep the audio from camera one throughout.”
+- “This cut feels abrupt. Hold the previous shot longer.”
+- “Undo the last AI change.”
+- “Make a vertical version, but keep this person in frame.”
+The result must be an actual editable timeline and playable/exportable video. Build real editing functionality, not a chat interface that describes edits or a dashboard with simulated progress.
+This is an AI-assisted editor for existing footage. Generating video, cloning voices and inventing missing camera angles are outside the first release.
+2. FIRST-RELEASE SCOPE
+Default to local-first:
+- A browser-based editor connected to a local backend.
+- Original media, proxies, project files and rendered outputs remain on the user’s machine unless the user explicitly chooses external AI analysis.
+- Aim for macOS Apple Silicon and Windows support. Verify on the environment actually available and disclose anything not tested on the other platform.
+- No Docker requirement for ordinary use.
+- No cloud accounts, payments, public hosting or shared uploads required to edit locally.
+The first complete workflow must support 3–5 clips from one short event:
+import → prepare proxies → synchronize → inspect angles → make manual cuts → request an AI revision → undo/redo → save/reopen → export MP4.
+Manual editing must work without an API key. AI controls should clearly explain when a provider has not been configured.
+3. EDITOR EXPERIENCE
+Create a polished, desktop-first workspace with:
+- Left: media library with thumbnails, duration, resolution, audio availability and processing status.
+- Centre: video preview with play/pause, seek, time display and frame stepping where supported.
+- Below preview: synchronized angle thumbnails for the current event moment.
+- Bottom: zoomable, horizontally scrollable timeline with playhead, clip thumbnails, waveforms and selection.
+- Right: AI conversation, current operation, applied changes and selected-clip properties.
+The user can resize panels. Provide useful empty states, keyboard shortcuts and readable loading/error states. Keep the workspace focused on footage rather than decorative cards.
+Show real editing activity: highlight an affected timeline region, show a proposed or applied change, and update the preview. Display concise action summaries and actual job progress. Do not simulate an agent thinking or expose hidden model reasoning.
+For version one, support:
+- One composed video track assembled from multiple source angles.
+- A master/source audio track and an optional imported music track.
+- Optional captions when transcription is available.
+- Select, split, trim, delete, reorder and switch source angle.
+- Explicit ripple-delete behavior.
+- Basic audio gain, mute and short audio fades.
+- Fit/fill and manually adjustable crop for landscape or portrait output.
+- Undo/redo, autosave, project reopening and visible edit history.
+Hard cuts are the first priority. Add dissolves or more effects only when both preview and export support them correctly. Do not show nonfunctional buttons.
+4. INGESTION AND MEDIA PROCESSING
+Use native FFmpeg and ffprobe through controlled backend workers.
+On import:
+- Validate the file and inspect its actual media properties.
+- Record duration, streams, frame-rate/time-base information, rotation, resolution and audio characteristics.
+- Generate lightweight editing proxies, thumbnails and waveform data.
+- Preserve originals without destructive modification.
+- Give every asset a stable ID and track its derived files.
+- Report missing codecs or unsupported inputs clearly.
+Support common MP4/MOV phone footage first. Handle variable-frame-rate recordings and rotation metadata deliberately. Never assume source frame indexes equal proxy or output frame indexes.
+Use proxies for responsive preview and original media for final export. Maintain and test the timestamp mapping between them.
+5. MULTICAMERA SYNCHRONIZATION
+The synchronization engine must use measured media evidence, not an LLM guessing timestamps.
+Initial approach:
+- Extract comparable audio signals.
+- Estimate offsets using audio fingerprinting or normalized cross-correlation.
+- Build an overlap graph between clips.
+- Present proposed alignment with confidence and ambiguity information.
+- Allow manual offset adjustment and matching user-defined anchor points.
+Different cameras may start late, stop early or contain gaps. Show where an angle has no footage. Never fill missing coverage silently.
+Repeated music, crowd noise, quiet clips and distant microphones can create false matches. Refuse uncertain automatic alignment and offer manual correction. Detect likely clock drift on longer recordings; warn explicitly if correcting that drift is outside the implemented scope.
+Keep event/source synchronization separate from the edited output timeline. Removing ten seconds from the final edit must not destroy the original event alignment.
+6. CANONICAL PROJECT AND TIMELINE MODEL
+Define a versioned project schema before splitting implementation across agents.
+Include:
+- Project settings and output dimensions/frame rate.
+- Asset references and media metadata.
+- Synchronization groups, offsets, confidence and manual anchors.
+- Video segments with source IDs, source in/out points and output positions.
+- Audio segments, gain and fades.
+- Crop/transform settings.
+- Caption segments when present.
+- Project revision, edit transactions and analysis provenance.
+Use integer time units with a declared time base, plus rational frame-rate information where needed. Specify exclusive end boundaries and source-to-output mappings. Avoid accumulating floating-point timing errors.
+The same project document must drive manual editing, AI edits, preview and export. Do not maintain a separate hidden AI timeline.
+Every edit is a validated atomic transaction against a known project revision. Reject stale edits or explicitly rebase them; do not overwrite intervening manual changes. Undo and redo must work for both AI and manual operations.
+7. AI PROVIDERS
+Use OpenRouter as the first runtime AI provider. Put it behind a provider interface so OpenCode Zen can be supported without rewriting the editor.
+Use current official documentation and verify model capabilities:
+- https://openrouter.ai/docs/guides/features/tool-calling
+- https://openrouter.ai/docs/guides/features/structured-outputs
+- https://openrouter.ai/docs/guides/overview/multimodal/videos
+- https://opencode.ai/docs/zen/
+Do not assume every model supports vision, native video, tool calling or strict structured output. Let the user configure a model ID and validate the capabilities needed for each operation. Explain unsupported combinations.
+OpenRouter/Zen runtime usage has its own billing, separate from the coding tools used to build this project. Include configurable request/token budgets, bounded retries and cancellation. Show usage returned by the provider and label cost estimates as estimates.
+Keep API keys in backend-only configuration or an appropriate local credential store. Never include keys in browser bundles, project exports, screenshots, logs or committed files. Supply example configuration with placeholders. Do not ask for secrets in chat or make paid calls without the user’s approval.
+8. MEDIA UNDERSTANDING
+Build an analysis layer that can supply:
+- Timestamped sampled frames/contact sheets.
+- Scene boundaries and basic visual quality signals.
+- Audio levels and clipping/silence indicators.
+- Optional timestamped speech transcription.
+- Clip summaries and candidate useful moments, each tied to source timestamps.
+Use deterministic processing for measurements. Use a compatible vision/language model for semantic interpretation and editing suggestions.
+Sampled frames can miss fast action. Distinguish observations, confidence and guesses. Allow denser sampling around a selected moment. Do not claim the model watched every frame when it did not.
+Cache analysis by asset fingerprint, analysis version and relevant model/settings. Avoid sending the same footage repeatedly for every small revision.
+Before external analysis, show the provider/model and what will leave the machine: selected frames, transcript, audio, video or metadata. Approval must apply to the relevant assets and purpose. Local-first must not be presented as fully offline when cloud AI is active.
+Transcription should be an optional capability with an honest unavailable state. Do not silently download large models or fabricate transcripts.
+9. AGENT ORCHESTRATION
+Use these logical roles, without requiring a separate expensive model call for every role:
+Footage analyst:
+Reads media analysis, identifies usable footage and returns timestamped evidence. Independent clip analysis may run in parallel with a concurrency limit.
+Director:
+Combines the user’s request, selected timeline region, existing edit and analysis into a concrete edit plan. For ambiguous requests, ask a focused question or present a reversible preview.
+Editor:
+Produces structured operations against the current timeline revision.
+Checker:
+Validates source ranges, timing, missing media, audio coverage and supported effects. Deterministic validation is mandatory; optional model critique cannot replace it.
+One coordinator is responsible for committing timeline changes. Analysis agents must not independently mutate the project or launch arbitrary shell commands.
+Provide narrow editing tools such as:
+- inspect_project
+- inspect_clip
+- analyze_range
+- split_segment
+- trim_segment
+- insert_segment
+- remove_segment
+- switch_angle
+- set_audio_source
+- set_audio_gain
+- set_crop
+- add_caption
+- preview_edit
+- apply_edit_transaction
+- undo_transaction
+Define explicit input/output schemas and validate every argument. Model responses are untrusted proposals. Check asset existence, valid time ranges, effect limits and revision preconditions before execution.
+Simple explicit requests can apply immediately with undo. Large or ambiguous restructures should first present a proposed cut. Export, cloud upload and deletion of source files must never occur as an accidental side effect of an editing request.
+10. PREVIEW AND EXPORT
+Generate both browser preview instructions and FFmpeg render instructions from the same timeline model.
+Start with a small, reliable supported effect set. Unsupported effects must fail clearly rather than preview one thing and export another.
+Export:
+- MP4 with a broadly compatible video/audio encoding when available.
+- Landscape and portrait presets.
+- Progress, cancel, useful error output and an explicit output destination.
+- Original-quality inputs with the declared output settings.
+Validate the completed file with ffprobe and a decode check. Verify duration, dimensions, expected streams and audio presence. Do not label an export successful merely because a process was launched.
+11. BACKGROUND JOBS AND LOCAL SECURITY
+Import, proxy generation, analysis, transcription and export need durable job records with queued/running/succeeded/failed/canceled states.
+Include:
+- Bounded worker concurrency and resource limits.
+- Progress based on actual work where measurable; indeterminate status otherwise.
+- Cancellation that also stops child processes.
+- Temporary-file cleanup and safe recovery after restart.
+- Atomic publication of completed outputs so partial files never look finished.
+Bind the backend to loopback by default. Protect state-changing endpoints against untrusted cross-origin requests. Scope file access to imported assets and project directories. Use asset IDs rather than unrestricted paths, validate uploads and defend against path traversal.
+Launch FFmpeg with argument arrays, never shell commands assembled from model output. Treat filenames, transcripts, metadata and visible text inside media as content, never trusted instructions.
+12. SUGGESTED STACK
+Use a pragmatic stack unless an existing repository provides a better foundation:
+- Frontend: Next.js, TypeScript, React and Tailwind.
+- Editor state: a focused store such as Zustand, with a separate pure timeline/transaction module.
+- Timeline: Canvas or carefully virtualized DOM, selected based on actual responsiveness.
+- Backend: FastAPI/Python.
+- Media processing: native FFmpeg/ffprobe workers.
+- Persistence: SQLite for projects/jobs and filesystem storage for media.
+- Progress: SSE or WebSockets.
+- Testing: Python tests, TypeScript unit tests and Playwright browser tests.
+Keep the timeline engine, sync engine, media worker, AI adapter and UI separable. Avoid unnecessary frameworks or a distributed microservice architecture for this local application.
+Use currently supported dependency versions, pin them and document requirements. Do not require CUDA. Hardware acceleration is optional and must have a working software fallback. A packaged desktop wrapper can follow after the local browser workflow is stable.
+13. PARALLEL DEVELOPMENT PLAN
+First establish shared schemas, API contracts, directory ownership and acceptance tests. Then split independent work:
+- Agent A: media import, metadata, proxies, thumbnails and jobs.
+- Agent B: synchronization engine and known-offset fixtures.
+- Agent C: canonical timeline, transactions, undo/redo and export compiler.
+- Agent D: editor UI, playback, selection and manual interactions.
+- Agent E: provider adapter, structured tools and orchestration.
+- Agent F: independent QA, integration tests, security checks and setup documentation.
+Use one integration owner. Agents must coordinate changes to shared schemas, dependency manifests and database migrations. Do not let everyone edit the same central files simultaneously.
+Integrate early. Get import → manual cut → preview → export working before adding complex AI planning. Use the available coding capacity for tests, real integration, performance and refinement rather than unnecessary agent chatter.
+14. IMPLEMENTATION PRIORITIES
+Milestone 1: runnable application, imports, proxies, manual timeline, save/reopen and a correct exported cut.
+Milestone 2: synchronization, confidence display, manual offsets and multicamera switching.
+Milestone 3: one real provider integration, media analysis, natural-language timeline changes, revision protection and undo.
+Milestone 4: polished interaction, optional transcription/captions, performance, robust cancellation and cross-platform setup.
+Complete and verify each vertical slice before expanding scope. If time becomes limited, deliver a smaller working product and explicitly list what remains. Do not replace unfinished core features with mock success screens.
+Later extensions, not first-release requirements: shared cloud upload links, collaborative editing, advanced color work, motion tracking, complex transitions, automatic music licensing and public publishing.
+15. ACCEPTANCE TESTS
+Use reproducible synthetic footage with visible timecodes and known audio signals, plus consented real clips when available. Synthetic fixtures must be labeled.
+Verify:
+- Import and metadata for common phone clips, including rotation and variable frame rates.
+- Known-offset alignment, ambiguous matches, disconnected clips and manual corrections.
+- Measured sync error against ground truth; report the tolerance achieved.
+- Correct source mapping after split, trim, reorder and ripple delete.
+- Smooth enough proxy playback on the tested machine, with measured limitations documented.
+- Manual edits and AI edits update the same timeline.
+- Stale AI responses cannot overwrite newer manual edits.
+- Undo/redo restores the exact prior project state.
+- Invalid asset IDs, out-of-range edits and unsupported operations are rejected.
+- Provider failure or no key leaves manual editing usable.
+- An explicit command such as “use camera B from 12 to 18 seconds and keep camera A audio” produces the expected operations.
+- Save/reopen preserves the edit and reports missing files gracefully.
+- Preview/export agree on cuts, crop and audio within declared frame/sample tolerances.
+- Canceling export stops work and does not expose a partial file as complete.
+- Keys are absent from client assets, exports and logs.
+- Media/transcript prompt injection cannot trigger privileged actions.
+Run a browser-level end-to-end test covering import, edit, AI change where authorized, undo, save/reopen and export. If real provider calls cannot be tested, distinguish adapter tests from an unverified live integration.
+16. DELIVERABLES
+Provide:
+- Complete source in a clean repository.
+- Clear macOS and Windows setup/run instructions.
+- Dependency and FFmpeg preflight checks.
+- Backend-only example configuration without secrets.
+- Architecture and timeline-schema documentation.
+- Test commands, results and honestly stated platform coverage.
+- A small reproducible fixture project demonstrating multicamera alignment and editing.
+- One verified exported sample and screenshots of the actual running editor when supported.
+- A concise completion report separating working features, limitations and unverified integrations.
+Do not claim this product category is unprecedented. Its value should come from excellent handling of messy multicamera footage, precise user-directed revisions, transparent AI actions and dependable exports.
+Begin by inspecting the available repository and environment, then establish the contracts and implementation plan. Build and test the core workflow end to end. Ask before paid services, public deployment, credential setup or other actions requiring separate permission.

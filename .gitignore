@@ -1,0 +1,17 @@
+.venv/
+.tools/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.env.*
+!.env.example
+data/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+.DS_Store
+artifacts/*.mp4
+!artifacts/angleforge-verified-multicam.mp4
+artifacts/fixtures/
