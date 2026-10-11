@@ -1,11 +1,10 @@
 {
   "provider": "openrouter",
   "model": "dots-studio/dots-3-note-preview:free",
-  "test": "synthetic portrait settings proposal",
+  "test": "synthetic portrait settings proposal through running API",
   "footage_sent": false,
   "free_only": true,
   "key_spending_cap": 0,
-  "retries": 0,
   "status": "passed",
   "operations": [
     {
@@ -19,10 +18,10 @@
     }
   ],
   "usage": {
-    "prompt_tokens": 1663,
-    "completion_tokens": 502,
-    "total_tokens": 2165,
+    "prompt_tokens": 2078,
+    "completion_tokens": 546,
+    "total_tokens": 2624,
     "cost": 0
   },
-  "summary": "Changed output dimensions to portrait 1080x1920 at 30 fps as requested."
+  "summary": "Setting the output dimensions to portrait 1080 by 1920 at 30 fps while keeping all existing video and audio segments unchanged."
 }
